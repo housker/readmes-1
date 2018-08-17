@@ -80,17 +80,14 @@ module.exports = {
 
   addArticle: (obj, cb) => {
     Category.findOne({where: {name: 'Github READMEs'}}).then(foundCat => {
-      console.log('========= foundCat ', foundCat)
       let newArt = Article.build({
         title: obj.title,
         description: obj.description,
         content: obj.content,
-        companyId: 4
+        companyId: 2
       })
-
       newArt.setCategory(foundCat, {save: false});
       newArt.save().then(() => cb('success'))
-
     })
   },
 

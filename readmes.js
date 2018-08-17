@@ -6,20 +6,30 @@ const db = require('./dbhelpers.js');
 // FETCH GITHUB READMES
 axios({
   method:'get',
-  url:'https://api.github.com/search/repositories?q=stars:>=30000',
+  url:'https://api.github.com/search/repositories?q=stars:>=500',
   headers: {Authorization: config.apiKey}
 })
 .then(function(response) {
-  const totalPages = parseInt(response.headers.link.split(',')[1].match(/page=(\d*)/)[1])
   grabEntries(response);
 });
 
 function callNext(next) {
   axios(next)
-  .then((response) => {
-    grabEntries(response)
+  .then(response => {
+    axios({
+      method:'get',
+      url:`https://api.github.com/rate_limit`,
+      headers: {Authorization: config.apiKey},
+    })
+    .then(res => {
+    })
+    return response;
   })
-  .catch(err => err)
+  .then(res => grabEntries(res))
+  .catch(err => {
+    console.log('------waiting for rate limit reset --------')
+    setTimeout(callNext, 30000, next)
+  })
 }
 
 async function setObject(repo, i, arr) {
@@ -38,13 +48,14 @@ async function setObject(repo, i, arr) {
         description: repo.description,
         content: html,
       }
-
       // INSERT READMES IN DATABSE
-      db.addArticle(entry, (success) => console.log(success))
-      resolve(entry.title)
+      setTimeout(db.addArticle, 100, entry, (success) => console.log(success))
+    })
+    .then(() => {
+      resolve('success')
     })
     .catch(err => {
-      resolve('')
+      resolve('error')
     })
   });
 }
@@ -52,18 +63,27 @@ async function setObject(repo, i, arr) {
 
 function grabEntries(response) {
   let allEntries = [];
-  let nextUrl, nextPg, currentPg;
-  let nextGroup = response.headers.link.split(',').filter(link => link.includes('rel=\"next\"'))[0]
-  if(nextGroup) {
+  let nextUrl, nextPg, currentPg, lastUrl, lastPg;
+  let lastGroup = response.headers.link.split(',').filter(link => link.includes('rel=\"last\"'))[0];
+  if(lastGroup) {
+    lastUrl = lastGroup.match(/\<(.*)\>\;\s*rel=\"last\"/)[1];
+    lastPg = lastUrl.match(/page=(\d*)/)[1];
+    let nextGroup = response.headers.link.split(',').filter(link => link.includes('rel=\"next\"'))[0];
     nextUrl = nextGroup.match(/\<(.*)\>\;\s*rel=\"next\"/)[1]
     nextPg = nextUrl.match(/page=(\d*)/)[1]
     currentPg = nextPg - 1;
+    console.log('------currentPg------', currentPg, ' of ', lastPg)
   }
-
   // GRAB NEXT PAGE OF API RESULTS
   Promise.all(response.data.items.map(setObject))
   .then((info) => {
-    callNext(nextUrl)
+    if(nextUrl) {
+      callNext(nextUrl)
+    } else {
+      console.log('done!')
+    }
   })
-  .catch(err => console.error(err.message))
+  .catch(err => {
+    console.error(err.message)
+  })
 }
