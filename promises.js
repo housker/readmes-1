@@ -1,9 +1,13 @@
+
+
+// PORTION WITH ASYNC fetchMeta:
+
+
 const axios = require('axios');
 const marked = require('marked');
 const config = require('./config.js');
 const db = require('./dbhelpers.js');
 const ranges = require('./ranges.js');
-var rangesIndex = 0;
 
 
 // const cluster = require('cluster');
@@ -42,35 +46,38 @@ var rangesIndex = 0;
 
 
 
-
-    // axios({
-    //   method:'get',
-    //   url:`https://api.github.com/rate_limit`,
-    //   headers: {Authorization: config.apiKey},
-    // })
-    // .then(res => {
-    //   console.log(res)
-    // })
+  Promise.all(config.ranges['254'].map(fetchMeta))
+  .then((info) => {
+    console.log('done!')
+  })
+  .catch(err => {
+    console.error(err.message)
+  })
 
 
 
-fetchMeta(config.ranges['254'][rangesIndex]);
+
 
 // config.ranges['254'].forEach(range => fetchMeta(range))
 
 // FETCH GITHUB READMES
-function fetchMeta(range) {
-  axios({
-    method:'get',
-    url:`https://api.github.com/search/repositories?q=stars:${range}&per_page=100`,
-    headers: {
-      Accept: 'application/vnd.github.v3+json',
-      Authorization: config.apiKey
-    }
+async function fetchMeta(range, i, arr) {
+  return new Promise((resolve, reject) => {
+
+    axios({
+      method:'get',
+      url:`https://api.github.com/search/repositories?q=stars:${range}&per_page=100`,
+      headers: {
+        Accept: 'application/vnd.github.v3+json',
+        Authorization: config.apiKey
+      }
+    })
+    .then(function(response) {
+      grabEntries(response);
+    })
+    .then(resolve(`entries for range of index ${i} complete`));
   })
-  .then(function(response) {
-    grabEntries(response);
-  });
+
 }
 
 
@@ -145,9 +152,8 @@ function grabEntries(response) {
   .then((info) => {
     if(nextUrl) {
       callNext(nextUrl)
-    } else if(rangesIndex < config.ranges['254'].length - 1) {
-      fetchMeta(config.ranges['254'][++rangesIndex])
     } else {
+      fetchMeta()
       console.log('done!')
     }
   })
@@ -155,3 +161,4 @@ function grabEntries(response) {
     console.error(err.message)
   })
 }
+
